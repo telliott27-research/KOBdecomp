@@ -1,11 +1,14 @@
+#' Get Explained/Endowment Part of a Decomposition
+#'
 #' This function calculates the explained or endowment part of a Kitawaga-Oaxaca-Blinder (KOB) decomposition
 #' generalized to a continuous grouping variable. Rarely used directly by the user.
 #'
 #' @param m a correctly specified model for an KOB decomposition
 #' @param xes a character vector giving the names of the independent (or control) variables
 #' @param ges a character vector giving the name(s) of the grouping variable and any polynomial transformations. The list should be ordered by increasing polynomial.
-#' @param {i, j} values of the group variable to compare
+#' @param i,j values of the group variable to compare
 #' @return The amount of difference attributable to the explained part in a KOB decomposition
+#' @import dplyr
 #' @export
 getExplained<-function(m,xes,ges,i=1,j=0) {
   totalE<-0
@@ -32,13 +35,15 @@ getExplained<-function(m,xes,ges,i=1,j=0) {
   return(totalE-totalE2)
 }
 
+#' Get unexplained part of KOB decomposition
+#'
 #' This function calculates the unexplained part of a Kitawaga-Oaxaca-Blinder (KOB) decomposition
 #' generalized to a continuous grouping variable. This function is rarely directly used by the user.
 #'
 #' @param m a correctly specified model for an KOB decomposition
 #' @param xes a character vector giving the names of the independent (or control) variables
 #' @param ges a character vector giving the name(s) of the grouping variable and any polynomial transformations. It is assumed that the first element is the original grouping variable.
-#' @param {i, j} values of the group variable to compare
+#' @param i,j values of the group variable to compare
 #' @return The amount of difference attributable to the unexplained part of a KOB decomposition.
 #' @export
 getUnexplained<-function(m,xes,ges,i=1,j=0) {
@@ -58,16 +63,27 @@ getUnexplained<-function(m,xes,ges,i=1,j=0) {
   return(a)
 }
 
-#' Convenience function
+#' Decompose Model
 #'
-#' Prints the summary of the passed model, as well as the
-#' percent explained and percent unexplained
+#' This function takes a model, and list of variables, to generate a decomposition
+#' of the difference in outcome for the grouping variable.
+#'
+#' @param m a linear regression model
+#' @param xes a character vector giving the names of the independent (or control) variables
+#' @param ges a character vector giving the name(s) of the grouping variable and any polynomial transformations. It is assumed that the first element is the original grouping variable.
+#' @param i,j values of the group variable to compare
+#'
+#' @return Returns a list with the following items:
+#'   \code{model} - a copy of the \code{m} object passed to the function
+#'   \code{total} - the total difference for the outcome variable
+#'   \code{explained} - the amount of difference attributed to the explained part
+#'   \code{unexplained} - the amount of difference attributed to the unexplained part
 
 decompose<-function(m,xes,ges,i=1,j=0) {
   ex<-unname(getExplained(m,xes=xes,ges=ges,i=i,j=j))
   un<-unname(getUnexplained(m,xes=xes,ges=ges,i=i,j=j))
   yvar<-all.vars(m$terms)[1]
-  total<-estimateX(m$model[[yvar]],m$model[[ges[1]]],i)-estimateX(m$model[[yvar]],m$model[[ges[1]]],j)
+  total<-ex+un
   de.list<-list()
   de.list[["model"]]<-m
   de.list[["total"]]<-total
@@ -76,23 +92,18 @@ decompose<-function(m,xes,ges,i=1,j=0) {
   return(de.list)
 }
 
-#' print summary decompose
-#'
-
-prDecomp<-function(de) {
-  #print(summary(de[["model"]]))
-  print(paste0("Total difference: ",round(de[["total"]],digits=4)))
-  print(paste0("Explained difference: ",round(de[["explained"]],digits=4)))
-  print(paste0("Explained percent: ",round(100*de[["explained"]]/de[["total"]],digits=4)))
-  print(paste0("Unexplained difference: ",round(de[["unexplained"]],digits=4)))
-  print(paste0("Unexplained percent: ",round(100*de[["unexplained"]]/de[["total"]],digits=4)))
-}
-
 #' Generate simulated residuals for a latent variable
 #'
 #' Based on Wolff (2012), this will generate simulated residuals from a probit model
 #' such that the generated residual plus the linear prediction corresponds to the observed
 #' outcome (i.e. Y==1:Y*>0; Y==0:Y*<=0)
+#'
+#' @param m a probit regression model
+#' @param df the data used to run the probit regression
+#' @param outcome the name of the outcome variable
+#'
+#' @return A vector of simulated residuals
+#' @export
 
 simulateResiduals<-function(m,df,outcome="y") {
   df$trueres<-NA
@@ -113,6 +124,13 @@ simulateResiduals<-function(m,df,outcome="y") {
 #' Based on Wolff (2012), this will generate simulated residuals from a mlogit model
 #' such that the generated residual plus the linear prediction corresponds to the observed
 #' outcome
+#'
+#' @param m a multinom regression model from the nnet package
+#' @param df the data used to run the probit regression
+#' @param outcome the name of the outcome variable
+#'
+#' @return A matrix of simulated residuals, one column for each possible outcome
+#' @export
 
 simMlogitRes<-function(m,df,outcome="y") {
   #assumes m is mlogit
@@ -213,8 +231,7 @@ gen_decomposed_results_probit <- function(fitted.mdl,
     }
   }
 
-  decomp.df<-decomp.df %>% mutate(total=explained+unexplained,
-                                  percent.explained=100*explained/total,
+  decomp.df<-decomp.df %>% mutate(percent.explained=100*explained/total,
                                   percent.unexplained=100*unexplained/total)
 
   # return fitted OLS and decomp results data frame
@@ -223,4 +240,87 @@ gen_decomposed_results_probit <- function(fitted.mdl,
     "decomp.df" = decomp.df
   )
 
+}
+
+#' Decompose results of a mulitnomial regression model
+#'
+#' Given a properly expressed multinom regression, decompose the results into an
+#' explained and unexplained parts.
+#'
+#' @param fitted.mdl A multinom regression object from the nnet package
+#' @param df.analysis the dataframe used to run the regression model
+#' @param list_of_IVs A character vector indicator the predictor variables included in the probit model
+#' @param list_of_grouping_vars A character vector of grouping variables included in the probit model
+#' @param values_of_grouping_vars A vector containing all possible values of the grouping variable.
+#' @return A list containing two objects. One, the fitted OLS model based
+#'   on the estimated log-odds continuous variable. Two, a data frame containing the decomposition
+#'   comparing every possible combination of values for the grouping variable.
+#' @importFrom nnet multinom
+#' @export
+
+gen_decomposed_results_multinom <- function(fitted.mdl,
+                                            df.analysis,
+                                            list_of_IVs,
+                                            list_of_grouping_vars,
+                                            values_of_grouping_vars) {
+
+  # get name of y varaible
+  yname <- all.vars(fitted.mdl$formula)[1]
+
+  #calculate predicted probabilities for each choice
+  ml.fit<-fitted(fitted.mdl,outcome=FALSE)
+
+  #convert predicted probabilities to log-odds, which we will use as the latent propensity
+  ml.fit.logit<-apply(ml.fit,c(1,2),logit)
+
+  #generate estimated residuals so that estimated latent scores correspond to observed choices
+  simres<-simMlogitRes(fitted.mdl,df.analysis,yname)
+
+  # generate ystar for each outcome
+  ystar<-ml.fit.logit+simres
+
+  # get number of outcomes in yvar
+  num.yvar <- length(unique(df.analysis[[yname]]))
+
+  decomp.df<-tibble()
+
+  # recreate formula for linear regression
+  x.terms <- fitted.mdl$terms[[3]]
+  new.formula <- paste0(c("ystar ~ ", deparse(x.terms)), collapse = "")
+
+  # for each outcome, decompose the results, calculating the difference
+  for( i in c(1:num.yvar) ) {
+    # create a new data frame with the ystar for the appropriate outcome
+    de.df<-data.frame(ystar=ystar[,i],df.analysis)
+    # run an OLS regression with ystar
+    de.lm<-lm(new.formula, de.df)
+    # generate decomposition for each year-year pair
+    for( y1 in values_of_grouping_vars ) {
+      for( y2 in values_of_grouping_vars ) {
+        if( y1 != y2 ) {
+          decom<-decompose(
+            de.lm,
+            xes=IVs,
+            ges=list_of_grouping_vars,
+            i=y2,
+            j=y1
+          )
+          df<-tibble(
+            choice=colnames(ystar)[i],
+            value1=y1,
+            value2=y2,
+            total=decom[["total"]],
+            explained=decom[["explained"]],
+            unexplained=decom[["unexplained"]]
+          )
+          decomp.df<-decomp.df %>% bind_rows(df)
+        }
+      }
+    }
+  }
+
+  decomp.df<-decomp.df %>% mutate(percent.explained=100*explained/total,
+                                  percent.unexplained=100*unexplained/total)
+
+  return(decomp.df)
 }
