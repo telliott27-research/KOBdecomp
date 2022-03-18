@@ -25,7 +25,6 @@ gen_decomposed_results_probit(
 A list containing two objects. One, the fitted OLS model based
   on the estimated log-odds continuous variable. Two, a data frame containing the decomposition
   comparing every possible combination of values for the grouping variable.
-  @export
 }
 \description{
 Given a properly expressed probit regression, decompose the results into an

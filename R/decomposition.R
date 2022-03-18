@@ -78,6 +78,7 @@ getUnexplained<-function(m,xes,ges,i=1,j=0) {
 #'   \code{total} - the total difference for the outcome variable
 #'   \code{explained} - the amount of difference attributed to the explained part
 #'   \code{unexplained} - the amount of difference attributed to the unexplained part
+#' @export
 
 decompose<-function(m,xes,ges,i=1,j=0) {
   ex<-unname(getExplained(m,xes=xes,ges=ges,i=i,j=j))
@@ -159,15 +160,18 @@ simMlogitRes<-function(m,df,outcome="y") {
   return(trueres)
 }
 
+#' @export
 logit.reverse<-function(x) {
   return( 1/(1+exp(-1*x)))
 }
 
+#' @export
 logit<-function(x) {
   log(x/(1-x))
 }
 
 #' This function calculates the average value of x at values of g=i
+#' @export
 estimateX<-function(x,g,i=0) {
   a<-x[which(g==i)]
   b<-mean(a,na.rm = TRUE)
@@ -184,7 +188,7 @@ estimateX<-function(x,g,i=0) {
 #' @return A list containing two objects. One, the fitted OLS model based
 #'   on the estimated log-odds continuous variable. Two, a data frame containing the decomposition
 #'   comparing every possible combination of values for the grouping variable.
-#'   @export
+#' @export
 gen_decomposed_results_probit <- function(fitted.mdl,
                                           list_of_IVs,
                                           list_of_grouping_vars,
@@ -225,7 +229,8 @@ gen_decomposed_results_probit <- function(fitted.mdl,
           value1=y1,
           value2=y2,
           explained=decom[["explained"]],
-          unexplained=decom[["unexplained"]])
+          unexplained=decom[["unexplained"]],
+          total = decom[["total"]])
         decomp.df <- decomp.df %>% bind_rows(df)
       }
     }
@@ -265,7 +270,7 @@ gen_decomposed_results_multinom <- function(fitted.mdl,
                                             values_of_grouping_vars) {
 
   # get name of y varaible
-  yname <- all.vars(fitted.mdl$formula)[1]
+  yname <- all.vars(fitted.mdl$terms)[1]
 
   #calculate predicted probabilities for each choice
   ml.fit<-fitted(fitted.mdl,outcome=FALSE)
